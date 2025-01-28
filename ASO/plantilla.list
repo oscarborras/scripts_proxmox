@@ -1,0 +1,3 @@
+#Formato: <usuario proxmox incluyendo ambito>:<nombre para MV>
+user1@pve:napellido
+

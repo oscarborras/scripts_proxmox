@@ -1,0 +1,9 @@
+*.log
+*.list
+*/*.list
+
+.env
+.vscode/
+
+# Excepto plantilla.list
+!/ASO/plantilla.list

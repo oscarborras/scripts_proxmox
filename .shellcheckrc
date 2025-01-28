@@ -1,0 +1,2 @@
+# ./.shellcheckrc
+disable=SC2162,SC2086,SC2178
