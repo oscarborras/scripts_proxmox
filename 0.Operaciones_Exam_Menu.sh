@@ -6,8 +6,8 @@
 #				    a partir de una plantilla asignandola a un pool y dándole permiso 
 #					de acceso al usuario
 #author          : Óscar Borrás
-#date mod        : <!#FT> 2025/01/28 17:37:03.273 </#FT>
-#version         : <!#FV> 0.4.2 </#FV>
+#date mod        : <!#FT> 2025/01/29 00:53:18.223 </#FT>
+#version         : <!#FV> 0.5.0 </#FV>
 #license         : GNU GPLv3 
 ############################################################################
 
@@ -21,22 +21,20 @@
 ############################################################################
 # POR CORREGIR:
 ############################################################################
-# - falta al asignar la sdn borrarle la mac al MV y ponerla en???
-# - falta probar la asignacion la red SDN en las MVs/CTs cuando la MV tiene 2 tarjetas de red
-# - Comprobar antes de eliminar una MV/CT que el pool del mismo coincide con el que está configurado en la var POOL del script.
+
 
 
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.4.2"
+VERSION="0.5.0"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.4.2 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.5.0 </#FV>"
 
 #Fichero log. Más adelante se indica la subcarpeta donde estará almacenado, que depende del pool
 LOG="$0.log"
 
-#Nombre del fichero de config
+#Nombre del fichero de config - se localiza en la subcarpeta del pool a usar
 FILE_CONF="0.Operaciones_Exam_Menu.conf"
 
 #var para guardar los POOLS disponibles en el servidor
@@ -61,8 +59,8 @@ msg_info() {
   spinner &
   SPINNER_PID=$!
 
-#version antigua  
-#  echo -ne " ${HOLD} ${YW}${msg} ...  "
+  #version antigua  
+  #  echo -ne " ${HOLD} ${YW}${msg} ...  "
 }
 
 msg_aviso() {
@@ -122,25 +120,10 @@ formato_mensajes() {
   CROSS="${TAB}✖️${TAB}${CL}"
   INFO="${TAB}💡${TAB}${CL}"
   OS="${TAB}🖥️${TAB}${CL}"
-  OSVERSION="${TAB}🌟${TAB}${CL}"
-  CONTAINERTYPE="${TAB}📦${TAB}${CL}" 
-  DISKSIZE="${TAB}💾${TAB}${CL}"
-  CPUCORE="${TAB}🧠${TAB}${CL}"
-  RAMSIZE="${TAB}🛠️${TAB}${CL}"
   SEARCH="${TAB}🔍${TAB}${CL}"
-  VERIFYPW="${TAB}🔐${TAB}${CL}"
   CONTAINERID="${TAB}🆔${TAB}${CL}"
   HOSTNAME="${TAB}🏠${TAB}${CL}"
-  BRIDGE="${TAB}🌉${TAB}${CL}"
-  NETWORK="${TAB}📡${TAB}${CL}"
-  GATEWAY="${TAB}🌐${TAB}${CL}"
   DISABLEIPV6="${TAB}🚫${TAB}${CL}"
-  DEFAULT="${TAB}⚙️${TAB}${CL}"
-  MACADDRESS="${TAB}🔗${TAB}${CL}"
-  VLANTAG="${TAB}🏷️${TAB}${CL}"
-  ROOTSSH="${TAB}🔑${TAB}${CL}"
-  CREATING="${TAB}🚀${TAB}${CL}"
-  ADVANCED="${TAB}🧩${TAB}${CL}"
 }
 
 
@@ -207,8 +190,8 @@ error_handler() {
 shell_check() {
   if [[ "$(basename "$SHELL")" != "bash" ]]; then
     clear
-    msg_error "Your default shell is currently not set to Bash. To use these scripts, please switch to the Bash shell."
-    echo -e "\nExiting..."
+    msg_error "Tu shell predeterminado no está configurado actualmente como Bash. Para usar estos scripts, por favor cambia al shell Bash."
+    echo -e "\nSaliendo..."
     sleep 2
     exit
   fi
@@ -218,8 +201,8 @@ shell_check() {
 root_check() {
   if [[ "$(id -u)" -ne 0 || $(ps -o comm= -p $PPID) == "sudo" ]]; then
     clear
-    msg_error "Please run this script as root."
-    echo -e "\nExiting..."
+    msg_error "Este script debe ejecutarse como root."
+    echo -e "\nSaliendo..."
     sleep 2
     exit
   fi
@@ -227,7 +210,7 @@ root_check() {
 
 
 clonar(){
-	msg_info "Comprobando tipo de Máquina Virtual (MV o CT)"
+	msg_info "..."
 	TIPO_MV=$(comprobar_tipo_MV ${ID_MV_CLONAR})
 	
 	msg_info "--> Clonando ${TIPO_MV} ** ${ID_MV_CLONAR} ** con ID ** ${ID_MV} ** con nombre < ${HOSTNAME} >"
@@ -252,7 +235,7 @@ clonar(){
 }
 
 configurar(){
-	msg_info "Comprobando tipo de Máquina Virtual (MV o CT)"
+	msg_info "..."
 	TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
 	
 	msg_info "--> Configurando ${TIPO_MV} ** ${ID_MV} ** "
@@ -294,16 +277,42 @@ asignar_SDN_MVs(){
 			qm set ${ID_MV} -net${INDEX} model=virtio,bridge=${VNET_NAMES[${INDEX}]}${NUM_ZONA} &>>${LOG}
 		else
 			msg_error "[ERROR] No se ha detectado el tipo de MV/CT a usar."
-			return 2	
 		fi
 
 		if [ $? -eq 0 ]
 		then
 			msg_ok "${TIPO_MV} ** ${ID_MV} ** asignada RED ** ${VNET_NAMES[${INDEX}]}${NUM_ZONA} **"
-			return 0
 		else
 			msg_error "[ERROR] al asignar RED ** ${VNET_NAMES[${INDEX}]}${NUM_ZONA} **  a ${TIPO_MV} con ID ** ${ID_MV} **"
-			return 1
+		fi
+	done
+}
+
+quitar_SDN_MVs(){
+	#local NUM_ZONA=$1
+	local RED_DEFAULT="vmbr1"
+	
+	for INDEX in "${!VNET_NAMES[@]}"; do
+    #echo "Índice: $INDEX, Valor: ${VNET_NAMES[$INDEX]}"
+
+		msg_info "Comprobando tipo de Máquina Virtual (MV o CT)"
+
+		TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
+
+		msg_info "--> Asignando RED  ** ${RED_DEFAULT} ** a ${TIPO_MV} con ID ** ${ID_MV} ** "
+		if [[ ${TIPO_MV} = "CT" ]]; then
+			pct set ${ID_MV} -net${INDEX} name=eth0,bridge=${RED_DEFAULT},ip=dhcp &>>${LOG}
+		elif [[ ${TIPO_MV} = "MV" ]]; then
+			qm set ${ID_MV} -net${INDEX} model=virtio,bridge=${RED_DEFAULT} &>>${LOG}
+		else
+			msg_error "[ERROR] No se ha detectado el tipo de MV/CT a usar."
+		fi
+
+		if [ $? -eq 0 ]
+		then
+			msg_ok "${TIPO_MV} ** ${ID_MV} ** asignada RED ** ${RED_DEFAULT} **"
+		else
+			msg_error "[ERROR] al asignar RED ** ${RED_DEFAULT} **  a ${TIPO_MV} con ID ** ${ID_MV} **"
 		fi
 	done
 }
@@ -360,6 +369,7 @@ comprobar_tipo_MV(){
 }
 
 iniciar_MVs(){
+	
 	msg_info "--> Iniciando la máquina ** ${ID_MV} **"
 
 	TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
@@ -371,16 +381,16 @@ iniciar_MVs(){
 	else
 		#no existe la MV/CT
 		msg_error "[ERROR] No se ha detectado el tipo de MV/CT a usar."
-		return 2	
+		#return 2	
 	fi
 
 	if ${CMD} start $ID_MV &>>${LOG}
 	then
 		msg_ok "Iniciado ${TIPO_MV} con ID ** ${ID_MV} **"
-		return 0
+		#return 0
 	else
 		msg_error "[ERROR] iniciando ${TIPO_MV} con ID ** ${ID_MV} **"
-		return 1
+		#return 1
 	fi
 }
 
@@ -409,6 +419,26 @@ parar_MVs(){
 	fi
 }
 
+#comprueba si la primera MV/CT clonada está en el POOL seleccionado al iniciar el script
+comprobar_Pool_MV(){
+	#pvesh get /pools/DWECL --output-format json-pretty | grep "vmid" | grep 10011
+	if pvesh get /pools/${MI_POOL} --output-format json-pretty | grep "vmid" | grep ${ID_MV_INICIAL} &>> ${LOG}
+	then
+		return 0
+	else 
+		return 1
+	fi
+}
+
+#comprueba si la ZONA a eliminar coincide con el POOL seleccionado al iniciar el script
+comprobar_Pool_SDN(){
+	if [[ "${MI_POOL}" = "${POOL}" ]]
+	then
+		return 0
+	else 
+		return 1
+	fi
+}
 
 eliminar_MVs(){
 	msg_info "--> 1. Apagando la máquina ** ${ID_MV} **"
@@ -462,12 +492,12 @@ eliminar_MVs(){
 }
 
 confirmar_eliminarMV(){
-	clear
 	echo
 	msg_error "Se va a **DESTRUIR** todas las MVs configuradas"
 	echo
 	read -p "    ¿Estas seguro de querer BORRARLAS? (si / no) " RESP
 	if [[ $RESP = "si" ]]; then
+		echo
 		acciones_MVs
 	else
 		echo
@@ -521,21 +551,25 @@ existe_SDN_ZonaxAlumno(){
 #Crea y usa zona del POOL y 1 vnet x alumno
 crear_SDN_ZonaxPool(){
 	clear
-	echo "*****************************" | tee -a ${LOG}
-	echo "     Creando SDN por POOL    " | tee -a ${LOG}
-	echo "*****************************" | tee -a ${LOG}
-	echo
+	cabecera_accion "Creando SDN por POOL"
+#	echo "*****************************" | tee -a ${LOG}
+#	echo "     Creando SDN por POOL    " | tee -a ${LOG}
+#	echo "*****************************" | tee -a ${LOG}
+#	echo
 		
 	local CONT_ALUMNOS=1
 	#var para asignar una subred distinta a cada usuario
 	#local CONT=1
 	local NUM=""
+	#var para saber si tengo que guardar los cambios o no
+	local SAVE_SDN=1
 
 	#creamos 1 zona para cada alumno - max 8 caracteres en nombre de la zona
 	msg_info "Creando ZONA ** ${POOL} **"
 	if pvesh create cluster/sdn/zones --type simple --zone ${POOL} --ipam pve --dhcp dnsmasq &>>${LOG}
 	then
 		msg_ok "Creada ZONA ** ${POOL} **"
+		SAVE_SDN=0
 	else
 		msg_error "[ERROR] al crear ZONA ** ${POOL} **"
 	fi
@@ -562,6 +596,7 @@ crear_SDN_ZonaxPool(){
 			if pvesh create cluster/sdn/vnets --vnet ${VNET_NAMES[$INDEX]}${NUM} --zone ${POOL} &>>${LOG}
 			then
 				msg_ok "Creada VNET ** ${VNET_NAMES[$INDEX]}${NUM} ** para alumno ** ${NOMBREMV} ** "
+				SAVE_SDN=0
 			else
 				msg_error "[ERROR] al crear VNET ** ${VNET_NAMES[$INDEX]}${NUM} ** para alumno ** ${NOMBREMV} ** "
 			fi
@@ -578,6 +613,7 @@ crear_SDN_ZonaxPool(){
 			if pvesh create cluster/sdn/vnets/${VNET_NAMES[$INDEX]}${NUM}/subnets/ --subnet ${SUBNET_ALU} --type subnet --gateway ${GATEWAY_ALU} --snat ${SNAT} --dhcp-range start-address=${DHCP_RANGE_START_ALU},end-address=${DHCP_RANGE_END_ALU} &>>${LOG}
 			then
 				msg_ok "Creada SUBNET ** ${SUBNET_ALU}** con GATEWAY ** ${GATEWAY_ALU} ** "
+				SAVE_SDN=0
 			else
 				msg_error "[ERROR] al crear SUBNET ** ${SUBNET_ALU} ** con GATEWAY ** ${GATEWAY_ALU} ** "
 			fi
@@ -588,20 +624,22 @@ crear_SDN_ZonaxPool(){
 		#let CONT++
 	done < $USUARIOS
 
-	#Aplicamos los cambios
-	msg_info " Aplicando cambios en SDN..."
-	if pvesh set cluster/sdn &>>${LOG}
-	then
-		msg_ok "SDN actualizado satisfactoriamente."
-	else
-		msg_error "[ERROR] al actualizar la SDN"
+	#Aplicamos los cambios si hay algún cambio sin error
+	if [ ${SAVE_SDN} -eq 0 ]; then
+		msg_info " Aplicando cambios en SDN..."
+		if pvesh set cluster/sdn &>>${LOG}
+		then
+			msg_ok "SDN actualizado satisfactoriamente."
+		else
+			msg_error "[ERROR] al actualizar la SDN"
+		fi
 	fi
-
 }
 
 
 #Funcion que crea redes SDN para cada alumno
 #Crea 1 zona y 1 vnet x alumno
+#no usada de momento
 crear_SDN_ZonaxAlumno(){
 	clear
 	echo "*****************************" | tee -a ${LOG}
@@ -676,14 +714,12 @@ crear_SDN_ZonaxAlumno(){
 
 eliminar_SDN_ZonaxPool(){
 	clear
-	echo "*****************************" | tee -a ${LOG}
-	echo "         Borrando SDN" | tee -a ${LOG}
-	echo "*****************************" | tee -a ${LOG}
-	echo
-		
+	cabecera_accion "Borrando SDN"
+	
 	local CONT_ALUMNOS=1
-	#local CONT=0
 	local NUM=""
+	#var para saber si tengo que guardar los cambios o no
+	local SAVE_SDN=1
 
 	while IFS=: read USUARIO NOMBREMV
 	do
@@ -710,6 +746,7 @@ eliminar_SDN_ZonaxPool(){
 			if pvesh delete cluster/sdn/vnets/${VNET_NAMES[$INDEX]}${NUM}/subnets/${POOL}-${SUBNET_GUION} &>>${LOG}
 			then
 				msg_ok "Subnet eliminada ** ${SUBNET_ALU} **"
+				SAVE_SDN=0
 			else
 				msg_error "[ERROR] al eliminar la subnet ** ${SUBNET_ALU} **"
 			fi
@@ -720,40 +757,40 @@ eliminar_SDN_ZonaxPool(){
 			if pvesh delete cluster/sdn/vnets/${VNET_NAMES[${INDEX}]}${NUM} &>>${LOG}
 			then
 				msg_ok "Eliminada VNET ** ${VNET_NAMES[${INDEX}]}${NUM} **"
+				SAVE_SDN=0
 			else
 				msg_error "[ERROR] al eliminar VNET ** ${VNET_NAMES[${INDEX}]}${NUM} **"
 			fi
 		done
 
-	
 		echo "------------------------------------"
 		let CONT_ALUMNOS++		
-		#let CONT++
 	done < $USUARIOS
 	
 	#Borramos la zona para cada alumno - max 8 caracteres en nombre de la zona
-		#pvesh delete /cluster/sdn/zones/alu01
-		msg_info "Eliminando ZONA ** ${POOL} **"
-		if pvesh delete cluster/sdn/zones/${POOL} &>>${LOG}
-		then
-			msg_ok "Eliminada ZONA ** ${POOL} **"
-		else
-			msg_error "[ERROR] al eliminar ZONA ** ${POOL} **"
-		fi
-
-	#Aplicamos los cambios
-
-	msg_info " Aplicando cambios en SDN..."
-	if pvesh set cluster/sdn &>>${LOG}
+	#pvesh delete /cluster/sdn/zones/alu01
+	msg_info "Eliminando ZONA ** ${POOL} **"
+	if pvesh delete cluster/sdn/zones/${POOL} &>>${LOG}
 	then
-		msg_ok "SDN actualizado satisfactoriamente."
+		msg_ok "Eliminada ZONA ** ${POOL} **"
 	else
-		msg_error "[ERROR] al actualizar la SDN"
+		msg_error "[ERROR] al eliminar ZONA ** ${POOL} **"
 	fi
 
+	#Aplicamos los cambios si hay algún cambio sin error
+	if [ ${SAVE_SDN} -eq 0 ]; then
+		#Aplicamos los cambios
+		msg_info " Aplicando cambios en SDN..."
+		if pvesh set cluster/sdn &>>${LOG}
+		then
+			msg_ok "SDN actualizado satisfactoriamente."
+		else
+			msg_error "[ERROR] al actualizar la SDN"
+		fi
+	fi
 }
 
-
+#no usada de momento
 eliminar_SDN_ZonaxAlumno(){
 	clear
 	echo "*****************************" | tee -a ${LOG}
@@ -915,6 +952,7 @@ mostrar_menu(){
 		echo "  a.- Consultar parametros y variables a usar."
 		echo "  b.- Modificar parámetros y variables"
 		echo "  x.- Solo para pruebas de opciones y comandos"
+		echo 
 		echo "  S.- Salir."
 		echo
 		read -r -p "  Elija una opcion --> " MODO
@@ -929,22 +967,67 @@ mostrar_menu(){
 				mostrar_parametros
 				pulsa_enter
 				;;
-			[1-6] | "x")
+			"x")
+				cabecera_accion "Pruebas"
 				acciones_MVs
 				pulsa_enter
 				;;
+			[1,2])
+				cabecera_accion "Clonación de MVs"
+				acciones_MVs
+				pulsa_enter
+				;;
+
+			3)
+				cabecera_accion "Asignar usuarios a MVs"				
+				acciones_MVs
+				pulsa_enter
+				;;
+			4)
+				cabecera_accion "Quitar acceso a MVs"
+				acciones_MVs
+				pulsa_enter
+				;;
+
+			5)
+				cabecera_accion " Iniciar MVs"
+				acciones_MVs
+				pulsa_enter
+				;;
+			6)
+				cabecera_accion " Parar MVs"
+				acciones_MVs
+				pulsa_enter
+				;;
+
 			7)
 				crear_SDN_ZonaxPool
 				acciones_MVs
 				pulsa_enter
 				;;
 			8)
-				confirmar_eliminar_SDN_ZonaxPool
+				if ! comprobar_Pool_SDN
+				then
+					echo
+					msg_error "La ZONA a eliminar no coincide con el POOL seleccionado al iniciar el script."
+					msg_icono "${SEARCH}" "Verifica que ha seleccionado el POOL correcto al iniciar el script."
+				else
+					acciones_MVs
+					confirmar_eliminar_SDN_ZonaxPool
+				fi
 				pulsa_enter
 				;;
 
 			9)
-				confirmar_eliminarMV
+				cabecera_accion "Eliminar MVs"
+				if ! comprobar_Pool_MV
+				then
+					echo
+					msg_error "Las MVs/CTs a eliminar no pertenecen al POOL seleccionado al iniciar el script."
+					msg_icono "${SEARCH}" "Verifica que ha seleccionado el POOL correcto al iniciar el script."
+				else
+					confirmar_eliminarMV
+				fi
 				pulsa_enter
 				;;
 			"b")
@@ -952,6 +1035,7 @@ mostrar_menu(){
 				pulsa_enter
 				;;
 			*)
+				echo
 				msg_error "Opción no válida. Espere por favor..."
 				sleep 2s			
 				;;
@@ -959,18 +1043,28 @@ mostrar_menu(){
 	done
 }
 
-acciones_MVs(){
+cabecera_accion(){
+	local msg="$1"
 	clear
+	echo "*****************************" | tee -a ${LOG}
+	echo "         ${msg}" | tee -a ${LOG}
+	echo "*****************************" | tee -a ${LOG}
+	echo	
+}
+
+
+acciones_MVs(){
+
 #	echo "*****************************" | tee -a ${LOG}
 #	echo "         MODO: ${MODO}" | tee -a ${LOG}
 #	echo "*****************************" | tee -a ${LOG}
 #	echo
 	
 	ID_MV=${ID_MV_INICIAL}
-
-	#NUM_MVs_CLONAR=${#IDs_MVs_CLONAR[@]}
 	CONT=0
-
+	#NUM_MVs_CLONAR=${#IDs_MVs_CLONAR[@]}
+	
+	#bucle para ejecutar acciones sobre cada máquina clonada
 	for ID_MV_CLONAR in "${IDs_MVs_CLONAR[@]}"; do
 		NOMBREPC=${NOMBRES_MVs[$CONT]}
 		NOTAS_MV=${NOTAS_MVs[$CONT]}
@@ -1028,6 +1122,9 @@ acciones_MVs(){
 					;;
 				7)
 					asignar_SDN_MVs ${NUM_ZONA}
+					;;
+				8)
+					quitar_SDN_MVs
 					;;
 				9)
 					eliminar_MVs
