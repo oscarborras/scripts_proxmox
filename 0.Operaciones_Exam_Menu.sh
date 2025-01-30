@@ -6,8 +6,8 @@
 #				    a partir de una plantilla asignandola a un pool y dándole permiso 
 #					de acceso al usuario
 #author          : Óscar Borrás
-#date mod        : <!#FT> 2025/01/29 16:55:35.269 </#FT>
-#version         : <!#FV> 0.5.1 </#FV>
+#date mod        : <!#FT> 2025/01/30 20:04:52.027 </#FT>
+#version         : <!#FV> 0.5.2 </#FV>
 #license         : GNU GPLv3 
 ############################################################################
 
@@ -27,9 +27,9 @@
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.5.1"
+VERSION="0.5.2"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.5.1 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.5.2 </#FV>"
 
 #Fichero log. Más adelante se indica la subcarpeta donde estará almacenado, que depende del pool
 LOG="$0.log"
@@ -350,17 +350,22 @@ quitar_acceso(){
 #comprueba si un ID es un CT (lxc) o una MV (qemu)
 comprobar_tipo_MV(){
 	# formas de comprobar tipo de mv de un ID
-	# pct list | grep -w ${ID_MV} &> /dev/null   -- es mas lento
-	# qm list | grep -w ${ID_MV} &> /dev/null
 	# pvesh get /cluster/resources --type vm --noborder
+	# pct list | grep -w ${ID_MV}
+	# qm list | grep -w ${ID_MV}
+	# las opciones anteriores son lentas. Mejor usar las siguientes que trabajan sobre el sistema de ficheros y es mas rapido
 	# cat /etc/pve/.vmlist | grep lxc | grep  ID
+	# ls /etc/pve/lxc | grep 10353
+	# ls /etc/pve/qemu-server | grep 10353
 
 	local ID_MV=$1
-
-	if cat /etc/pve/.vmlist | grep lxc | grep ${ID_MV} &> /dev/null
+	
+	#if pct list | grep -w ${ID_MV} &> /dev/null
+	if ls /etc/pve/lxc | grep -w ${ID_MV} &> /dev/null
 	then
 		echo "CT"
-	elif cat /etc/pve/.vmlist | grep qemu | grep ${ID_MV} &> /dev/null
+	#elif qm list | grep -w ${ID_MV} &> /dev/null
+	elif ls /etc/pve/qemu-server | grep -w ${ID_MV} &> /dev/null
 	then
 		echo "MV"
 	else

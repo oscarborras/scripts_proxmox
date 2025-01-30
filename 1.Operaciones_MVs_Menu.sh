@@ -3,8 +3,8 @@
 ############################################################################
 #title     : Permite realizar diferentes operaciones sobre MV y CTs
 #author    : Óscar Borrás
-#date mod  : <!#FT> 2025/01/30 01:09:49.597 </#FT>
-#version   : <!#FV> 0.5.1 </#FV>
+#date mod  : <!#FT> 2025/01/30 19:56:45.198 </#FT>
+#version   : <!#FV> 0.5.2 </#FV>
 ############################################################################
 
 ############################################################################
@@ -22,9 +22,9 @@
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.5.1"
+VERSION="0.5.2"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.5.1 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.5.2 </#FV>"
 
 LOG="$0.log"
 
@@ -302,16 +302,23 @@ quitar_acceso(){
 
 #comprueba si un ID es un CT (lxc) o una MV (qemu)
 comprobar_tipo_MV(){
-	
+	# formas de comprobar tipo de mv de un ID
 	# pvesh get /cluster/resources --type vm --noborder
-	# cat /etc/pve/.vmlist | grep lxc
+	# pct list | grep -w ${ID_MV}
+	# qm list | grep -w ${ID_MV}
+	# las opciones anteriores son lentas. Mejor usar las siguientes que trabajan sobre el sistema de ficheros y es mas rapido
+	# cat /etc/pve/.vmlist | grep lxc | grep  ID
+	# ls /etc/pve/lxc | grep 10353
+	# ls /etc/pve/qemu-server | grep 10353
 
 	local ID_MV=$1
-
-	if pct list | grep -w ${ID_MV} &> /dev/null
+	
+	#if pct list | grep -w ${ID_MV} &> /dev/null
+	if ls /etc/pve/lxc | grep -w ${ID_MV} &> /dev/null
 	then
 		echo "CT"
-	elif qm list | grep -w ${ID_MV} &> /dev/null
+	#elif qm list | grep -w ${ID_MV} &> /dev/null
+	elif ls /etc/pve/qemu-server | grep -w ${ID_MV} &> /dev/null
 	then
 		echo "MV"
 	else
@@ -334,11 +341,13 @@ verificar_IDs(){
 
 #comprueba si la primera MV/CT clonada está en el POOL seleccionado al iniciar el script
 comprobar_Pool_MV(){
-	local MV_INICIAL=$1
-	local MV_FINAL=$2
+	local MV_ID=$1
 
+	#cat /etc/pve/user.cfg | grep -w ID_MV | grep -w POOL
 	#pvesh get /pools/DWECL --output-format json-pretty | grep "vmid" | grep 10011
-	if pvesh get /pools/${MI_POOL} --output-format json-pretty | grep "vmid" | grep ${MV_INICIAL} &>> ${LOG}
+	#if pvesh get /pools/${MI_POOL} --output-format json-pretty | grep "vmid" | grep ${MV_INICIAL} &>> ${LOG}
+	#if cat /etc/pve/user.cfg | grep -w ${MV_ID} | grep -w ${MI_POOL} &>> ${LOG}
+	if pvesh get /pools/${MI_POOL} --output-format json-pretty | grep "vmid" | grep ${MV_ID} &>> ${LOG}
 	then
 		return 0
 	else 
@@ -362,8 +371,8 @@ iniciar_MV(){
 			msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
 			return 2	
 		fi
-		
-		if ${CMD} start ${ID_MV} &>>${LOG}
+		# ¡¡¡ se lanza en segundo plano para hacerlo más rápido, pero no estoy seguro si podré detectar así algún fallo !!!!
+		if ${CMD} start ${ID_MV} &>>${LOG} &
 		then
 			msg_ok "Iniciado la máquina ** ${ID_MV} **"
 			return 0
@@ -393,8 +402,8 @@ apagar_MV(){
 			msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
 			return 2	
 		fi
-
-		if ${CMD} shutdown ${ID_MV} &>>${LOG}
+		# ¡¡¡ se lanza en segundo plano para hacerlo más rápido, pero no estoy seguro si podré detectar así algún fallo !!!!
+		if ${CMD} shutdown ${ID_MV} &>>${LOG} &
 		then
 			msg_ok "Apagado la máquina ** ${ID_MV} **"
 			return 0
