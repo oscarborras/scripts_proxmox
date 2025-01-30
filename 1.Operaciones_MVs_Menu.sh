@@ -3,8 +3,8 @@
 ############################################################################
 #title     : Permite realizar diferentes operaciones sobre MV y CTs
 #author    : Óscar Borrás
-#date mod  : <!#FT> 2025/01/28 16:58:38.019 </#FT>
-#version   : <!#FV> 0.4.2 </#FV>
+#date mod  : <!#FT> 2025/01/30 01:09:49.597 </#FT>
+#version   : <!#FV> 0.5.1 </#FV>
 ############################################################################
 
 ############################################################################
@@ -17,21 +17,16 @@
 ############################################################################
 # POR CORREGIR:
 ############################################################################
-# - cambiar la comprobación de los ids por el POOL del usuario
+# - falta la creacion eliminacion de la SDN
 
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.4.2"
+VERSION="0.5.1"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.4.2 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.5.1 </#FV>"
 
 LOG="$0.log"
-
-#Fichero que contiene los ids asignado a cada profesor
-FICH_PROFESORES="1.ids_profesor.conf"
-# shellcheck source=/dev/null
-source ${FICH_PROFESORES}
 
 IDPROF_INICIAL=""
 IDPROF_FINAL=""
@@ -39,6 +34,22 @@ IDPROF_FINAL=""
 ############################################################################
 # FUNCIONES:
 ############################################################################
+
+msg_aviso() {
+  if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
+  printf "\e[?25h"
+  local msg="$1"
+  echo -e "${BFR}${INFO}${GN}${msg}${CL}"	
+}
+
+msg_icono() {
+  if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
+  printf "\e[?25h"
+  local msg="$2"
+  local icono="$1"
+  echo -e "${BFR}${icono}${GN}${msg}${CL}"	
+}
+
 
 msg_info() {
   if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
@@ -77,13 +88,17 @@ msg_error() {
 }
 
 function ayuda() {
-	echo "*******SIN TERMINAR *************************************************"
 cat << DESCRIPCION_AYUDA
 SYNOPIS
-    $0
+     $0 POOL
+
+	IMPORTANTE: El nombre del POOL debe coincidir con el nombre de una subcarpeta
+	
+	Ejemplo: $0 DWEC
 
 DESCRIPCIÓN
-    Permite iniciar, parar y ver estado del servicio.
+    Permite realizar unas series de operaciones sobre el servidor Proxmox y
+	sus máquinas virtuales y contenedores
 
 CÓDIGOS DE RETORNO
     0 - no hay ningún error.
@@ -109,6 +124,15 @@ mostrar_IDsprofesor() {
   local msg="Tus IDs: ${IDPROF_INICIAL}..${IDPROF_FINAL}"
   echo -e "${BFR}${OS}${GN}${msg}${CL}"	
   
+  echo "${msg}" >> ${LOG}		
+}
+
+mostrar_Pool_profesor() {
+  if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
+  printf "\e[?25h"
+  local msg=" Tu POOL: ${MI_POOL}"
+  echo -e "   ${BFR}${OS}${GN}${msg}${CL}"	
+  echo "----------------------------------"
   echo "${msg}" >> ${LOG}		
 }
 
@@ -308,94 +332,123 @@ verificar_IDs(){
 	fi
 }
 
+#comprueba si la primera MV/CT clonada está en el POOL seleccionado al iniciar el script
+comprobar_Pool_MV(){
+	local MV_INICIAL=$1
+	local MV_FINAL=$2
+
+	#pvesh get /pools/DWECL --output-format json-pretty | grep "vmid" | grep 10011
+	if pvesh get /pools/${MI_POOL} --output-format json-pretty | grep "vmid" | grep ${MV_INICIAL} &>> ${LOG}
+	then
+		return 0
+	else 
+		return 1
+	fi
+}
+
 iniciar_MV(){
 	local ID_MV=$1
 	
-	TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
-
-	if [[ ${TIPO_MV} = "CT" ]]; then
-		CMD="pct"
-	elif [[ ${TIPO_MV} = "MV" ]]; then
-		CMD="qm"
-	else
-		#no existe la MV/CT
-		msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
-		return 2	
-	fi
-	
-	msg_info "--> Iniciando la máquina ** ${ID_MV} **"
-
-	if ${CMD} start ${ID_MV} &>>${LOG}
+	if comprobar_Pool_MV ${ID_MV}
 	then
-		msg_ok "Iniciado la máquina ** ${ID_MV} **"
-		return 0
+		TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
+
+		if [[ ${TIPO_MV} = "CT" ]]; then
+			CMD="pct"
+		elif [[ ${TIPO_MV} = "MV" ]]; then
+			CMD="qm"
+		else
+			#no existe la MV/CT
+			msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
+			return 2	
+		fi
+		
+		if ${CMD} start ${ID_MV} &>>${LOG}
+		then
+			msg_ok "Iniciado la máquina ** ${ID_MV} **"
+			return 0
+		else
+			msg_error "[ERROR] iniciando la máquina ** ${ID_MV} **"
+			return 1
+		fi
 	else
-		msg_error "[ERROR] iniciando la máquina ** ${ID_MV} **"
-		return 1
+		msg_error "El POOL de la MV/CT ** ${ID_MV} ** no coincide con tu usuario."
+		return 2
 	fi
 }
 
 apagar_MV(){
 	local ID_MV=$1
 
-	TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
-
-	if [[ ${TIPO_MV} = "CT" ]]; then
-		CMD="pct"
-	elif [[ ${TIPO_MV} = "MV" ]]; then
-		CMD="qm"
-	else
-		#no existe la MV/CT
-		msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
-		return 2	
-	fi
-
-	msg_info "--> Apagando la máquina ** ${ID_MV} **"
-	if ${CMD} shutdown ${ID_MV} &>>${LOG}
+	if comprobar_Pool_MV ${ID_MV}
 	then
-		msg_ok "Apagado la máquina ** ${ID_MV} **"
-		return 0
+		TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
+
+		if [[ ${TIPO_MV} = "CT" ]]; then
+			CMD="pct"
+		elif [[ ${TIPO_MV} = "MV" ]]; then
+			CMD="qm"
+		else
+			#no existe la MV/CT
+			msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
+			return 2	
+		fi
+
+		if ${CMD} shutdown ${ID_MV} &>>${LOG}
+		then
+			msg_ok "Apagado la máquina ** ${ID_MV} **"
+			return 0
+		else
+			msg_error "[ERROR] apagando la máquina ** ${ID_MV} **"
+			return 1
+		fi
 	else
-		msg_error "[ERROR] apagando la máquina ** ${ID_MV} **"
-		return 1
-	fi
+		msg_error "El POOL de la MV/CT ** ${ID_MV} ** no coincide con tu usuario o no existe la MV/CT."
+		return 2
+	fi	
 }
 
 asignar_TAGS(){
 	local ID_MV=$1
 
-	TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
-
-	if [[ ${TIPO_MV} = "CT" ]]; then
-		CMD="pct"
-	elif [[ ${TIPO_MV} = "MV" ]]; then
-		CMD="qm"
-	else
-		#no existe la MV/CT
-		msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
-		return 2	
-	fi
-
-	msg_info "--> Asignando TAGS a máquina ** ${ID_MV} **"
-
-	#qm set ID --tags myfirsttag;mysecondtag
-	if ${CMD} set ${ID_MV} --tags "${TAGS}" &>>${LOG}
+	if comprobar_Pool_MV ${ID_MV}
 	then
-		msg_ok "Asignado TAGS a la máquina ** ${ID_MV} **"
-		return 0
+		TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
+
+		if [[ ${TIPO_MV} = "CT" ]]; then
+			CMD="pct"
+		elif [[ ${TIPO_MV} = "MV" ]]; then
+			CMD="qm"
+		else
+			#no existe la MV/CT
+			msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
+			return 2	
+		fi
+
+		#qm set ID --tags myfirsttag;mysecondtag
+		if ${CMD} set ${ID_MV} --tags "${TAGS}" &>>${LOG}
+		then
+			msg_ok "Asignado TAGS a la máquina ** ${ID_MV} **"
+			return 0
+		else
+			msg_error "[ERROR] asignando TAGS a la máquina ** ${ID_MV} **"
+			return 1
+		fi
 	else
-		msg_error "[ERROR] asignando TAGS a la máquina ** ${ID_MV} **"
-		return 1
-	fi
+		msg_error "El POOL de la MV/CT ** ${ID_MV} ** no coincide con tu usuario o no existe la MV/CT."
+		return 2
+	fi	
 }
 
-backups_MV(){
+
+backup_MV(){
 	local ID_MV=$1
 	local STORAGE=$2
 	local MODO=$3
 
 	msg_info "--> Realizando Backup de la máquina ** ${ID_MV} **"
-#/usr/bin/vzdump $ID_MV --node $NODO --remove 0 --storage $STORAGE --mode stop --notes-template '{{guestname}}' --compress zstd
+
+	#/usr/bin/vzdump $ID_MV --node $NODO --remove 0 --storage $STORAGE --mode stop --notes-template '{{guestname}}' --compress zstd
 	if vzdump ${ID_MV} --remove 0 --storage $STORAGE --mode ${MODO} --notes-template '{{guestname}}' --compress zstd &>>${LOG}
 	then
 		msg_ok "Backup realizado de la máquina ** ${ID_MV} **"
@@ -410,108 +463,99 @@ backups_MV(){
 eliminar_MV(){
 	local ID_MV=$1
 
-	TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
-
-	if [[ ${TIPO_MV} = "CT" ]]; then
-		CMD="pct"
-	elif [[ ${TIPO_MV} = "MV" ]]; then
-		CMD="qm"
-	else
-		#no existe la MV/CT
-		msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
-		return 2	
-	fi
-		
-	msg_info "--> 1. Apagando la máquina ** ${ID_MV} **"
-	if ${CMD} stop ${ID_MV} --timeout 2 &>>${LOG}
+	#comprobamos si la MV pertecene al POOL del usuario	
+	if comprobar_Pool_MV ${ID_MV}
 	then
-		msg_info "--> 2. Eliminando la máquina ** ${ID_MV} **"
-		if ${CMD} destroy ${ID_MV} --purge --destroy-unreferenced-disks=1 --skiplock=1 &>>${LOG}
-		then
-			msg_ok "Eliminado la máquina ** ${ID_MV} **"
-			return 0
+		TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
+
+		if [[ ${TIPO_MV} = "CT" ]]; then
+			CMD="pct"
+		elif [[ ${TIPO_MV} = "MV" ]]; then
+			CMD="qm"
 		else
-			msg_error "[ERROR] al eliminar la máquina ** ${ID_MV} **"
+			#no existe la MV/CT
+			msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
+			return 2	
+		fi
+			
+		msg_info "--> 1. Apagando la máquina ** ${ID_MV} **"
+		if ${CMD} stop ${ID_MV} --timeout 2 &>>${LOG}
+		then
+			msg_info "--> 2. Eliminando la máquina ** ${ID_MV} **"
+			if ${CMD} destroy ${ID_MV} --purge --destroy-unreferenced-disks=1 --skiplock=1 &>>${LOG}
+			then
+				msg_ok "Eliminado la máquina ** ${ID_MV} **"
+				return 0
+			else
+				msg_error "[ERROR] al eliminar la máquina ** ${ID_MV} **"
+				return 1
+			fi
+		else
+			msg_error "[ERROR] al parar la MV ** ${ID_MV} **"
 			return 1
 		fi
 	else
-		msg_error "[ERROR] al parar la MV ** ${ID_MV} **"
-		return 1
+		msg_error "El POOL de la MV/CT ** ${ID_MV} ** no coincide con tu usuario."
+		return 2
 	fi
 }
 
 iniciarMVs(){
-	clear
-	mostrar_IDsprofesor
+	mostrar_Pool_profesor
 	echo ""
-	echo "Indicar ID de la primera MV a iniciar:"
+	echo -n "Indicar ID de la primera MV a iniciar: "
 	read ID_INICIAL
-	echo "Indicar ID de la ultima MV a iniciar:"
+	echo -n "Indicar ID de la ultima MV a iniciar: "
 	read ID_FINAL
 	echo ""
 	
-	if verificar_IDs ${ID_INICIAL} ${ID_FINAL}
-	then
-		for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
-		do
-			iniciar_MV $ID_MV
-		done
-	else
-		msg_error "Los IDs indicados no se corresponden con tu usuario."
-	fi
+	for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
+	do
+		msg_info "--> Iniciando la máquina ** ${ID_MV} **"
+		iniciar_MV $ID_MV
+	done
 	echo	
 }
 
 apagarMVs(){
-	clear
-	mostrar_IDsprofesor
+	mostrar_Pool_profesor
 	echo ""
-	echo "Indicar ID de la primera MV a apagar:"
+	echo -n "Indicar ID de la primera MV a apagar: "
 	read ID_INICIAL
-	echo "Indicar ID de la ultima MV a apagar:"
+	echo -n "Indicar ID de la ultima MV a apagar: "
 	read ID_FINAL
 	echo ""
 
-	if verificar_IDs ${ID_INICIAL} ${ID_FINAL}
-	then
-		for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
-		do
-			apagar_MV $ID_MV
-		done
-	else
-		msg_error "Los IDs indicados no se corresponden con tu usuario."
-	fi
+	for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
+	do
+		msg_info "--> Apagando la máquina ** ${ID_MV} **"
+		apagar_MV ${ID_MV}
+	done
 	echo
 }
 
 asignarTAGs(){
-	clear
-	mostrar_IDsprofesor
+	mostrar_Pool_profesor
 	echo ""
 	read -p "Indica las etiquetas (TAG) a asignar separados por espacios: " TAGS
 	read -p "Indicar ID de la primera MV a asignar etiqueta: " ID_INICIAL
 	read -p "Indicar ID de la ultima MV a asignar etiqueta: " ID_FINAL
 	echo ""
 
-	if verificar_IDs ${ID_INICIAL} ${ID_FINAL}
-	then
-		for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
-		do
-			asignar_TAGS $ID_MV
-		done
-	else
-		msg_error "Los IDs indicados no se corresponden con tu usuario."
-	fi
+	for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
+	do
+		msg_info "--> Asignando TAGS a máquina ** ${ID_MV} **"
+		asignar_TAGS $ID_MV
+	done
 	echo
 }
 
 backupsMVs(){
-	clear
-	mostrar_IDsprofesor
+	mostrar_Pool_profesor
 	echo ""
-	echo "Indicar ID de la primera MV a la que realizar backup:"
+	echo -n "Indicar ID de la primera MV a la que realizar backup: "
 	read ID_INICIAL
-	echo "Indicar ID de la ultima MV a la que realizar backup:"
+	echo -n "Indicar ID de la ultima MV a la que realizar backup: "
 	read ID_FINAL
 
 	#STORAGE="local-backup1"
@@ -519,44 +563,35 @@ backupsMVs(){
 	read -p "Indica el tipo de backup (<snapshot | stop | suspend>): " TIPO
 	echo ""
 
-	if verificar_IDs ${ID_INICIAL} ${ID_FINAL}
-	then
-		for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
-		do
-			backups_MV $ID_MV $STORAGE $TIPO
-		done
-	else
-		msg_error "Los IDs indicados no se corresponden con tu usuario."
-	fi
+	for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
+	do
+		backup_MV $ID_MV $STORAGE $TIPO
+	done
 	echo
 }
 
 
 eliminarMVs(){
-	clear
-	mostrar_IDsprofesor
+	mostrar_Pool_profesor
 	echo ""
-	echo "Indicar ID de la primera máquina virtual o contenedor a borrar:"
+	echo -n "Indicar ID de la primera máquina o contenedor a borrar : "
 	read ID_INICIAL
-	echo "Indicar ID de la ultima máquina a borrar:"
+	echo -n "Indicar ID de la ultima máquina o contenedor a borrar  : "
 	read ID_FINAL
 
-	echo "Se va a **DESTRUIR** todas las MVs desde la ${ID_INICIAL} hasta la ${ID_FINAL}"
-	read -p "¿Estas seguro de querer BORRARLAS? (si / no) " RESP
-	echo ""
+	echo
+	msg_error "Se va a **DESTRUIR** todas las MVs desde la ${ID_INICIAL} hasta la ${ID_FINAL}"
+	echo
+	read -p "    ¿Estas seguro de querer BORRARLAS? (si / no): " RESP
+	echo 
 	
 	if [[ $RESP = "si" ]]; then
-		if verificar_IDs ${ID_INICIAL} ${ID_FINAL}
-		then
-			for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
-			do
-				eliminar_MV $ID_MV
-			done
-			echo
-		else
-			msg_error "Los IDs indicados no se corresponden con tu usuario."
-		fi
-
+		for (( ID_MV=$ID_INICIAL; ID_MV<=$ID_FINAL; ID_MV++ ))
+		do
+			msg_info "--> Comprobando POOL ..."
+			eliminar_MV $ID_MV
+		done
+		echo
 	else
 		echo "OPERACION ABORTADA"
 	fi
@@ -654,36 +689,18 @@ crear_SDN_estatica(){
 
 }
 
-# borrar esta funcion
-crear_sdn_estatica(){
-	#  pendiente de revisar y probar *********************************************
-	if [ S{CONT} -lt 10 ]; then
-		NUM="0${CONT}"
-	else
-		NUM="${CONT}"
-	fi
-	
-	#creamos 1 zona para cada alumno - max 8 caracteres en nombre de la zona
-	#pvesh create cluster/sdn/zones --type simple --zone zpvea --dhcp dnsmasq --ipam pve
-	pvesh create cluster/sdn/zones --type simple --zone alu${NUM} --ipam pve
-
-	#creamos 2 vnets para cada alumno (gestion y cluster) - max 8 caracteres en nombre de la vnet
-	pvesh create cluster/sdn/vnets --vnet gest${NUM} --zone alu${NUM}
-	pvesh create cluster/sdn/vnets --vnet clus${NUM} --zone alu${NUM}
-
-	# creamos subnet para cada alumno en cada vnet
-	#pvesh create cluster/sdn/vnets/pvea/subnets/ --subnet 192.168.20.0/24 --type subnet --gateway 192.168.20.1 --snat 1 --dhcp-range start-address=192.168.20.10,end-address=192.168.20.20
-	pvesh create cluster/sdn/vnets/clus${NUM}/subnets/ --subnet ${SUBNET1} --type subnet --gateway ${GATEWAY1}
-	pvesh create cluster/sdn/vnets/clus${NUM}/subnets/ --subnet ${SUBNET1} --type subnet --gateway ${GATEWAY2}
-	
-	#aplicamos config sdn
-	pvesh set cluster/sdn
-}
-
-
 pulsa_enter(){
 	echo; echo "Pulsa enter para volver al menú"
 	read enter
+}
+
+cabecera_accion(){
+	local msg="$1"
+	clear
+	echo "**********************************" | tee -a ${LOG}
+	echo "${msg}" | tee -a ${LOG}
+	echo "**********************************" | tee -a ${LOG}
+	echo	
 }
 
 mostrar_menu(){
@@ -695,13 +712,15 @@ mostrar_menu(){
 		echo "--------------------------------------------"
 		echo "   Operaciones sobre MVs y CTs (${VERSION})"
 		echo "--------------------------------------------"
-		mostrar_profesor "      Profesor/a: ${PROFESOR} (${IDPROF_INICIAL}..${IDPROF_FINAL})"
+		mostrar_profesor "  POOL de trabajo: ${MI_POOL}"
+		echo "--------------------------------------------"
 		echo
 		echo "  1.- Iniciar MVs"
 		echo "  2.- Apagar MVs"
 		echo "  3.- Asignar etiquetas a MVs"
 		echo "  4.- Realizar backups de MVs"
-		echo "  5.- Crear Red SDN (Zona - Vnet - Subred)"
+		echo "  5.- Crear Red SDN (Zona - Vnet - Subred)***************"
+		echo "  6.- Eliminar Red SDN (Zona - Vnet - Subred)************"
 		echo "  9.- Eliminar MVs"
 		echo
 		echo "  S.- Salir."
@@ -714,27 +733,33 @@ mostrar_menu(){
 				exit
 				;;
 			1)
+				cabecera_accion "        Iniciar MVs/CTs"
 				iniciarMVs
 				pulsa_enter
 				;;
 			2)
+				cabecera_accion "        Apagar MVs/CTs"
 				apagarMVs
 				pulsa_enter
 				;;
 			3)
+				cabecera_accion "     Asignar Tags a MVs/CTs"
 				asignarTAGs
 				pulsa_enter
 				;;
 			4)
+				cabecera_accion "   Realizar Backups de MVs/CTs"
 				backupsMVs
 				pulsa_enter
 				;;
 			5)
+				cabecera_accion "           Crear SDNs"
 				crearSDN
 				pulsa_enter
 				;;
 
 			9)
+				cabecera_accion "        Borrar MVs/CTs"
 				eliminarMVs
 				pulsa_enter
 				;;
@@ -821,21 +846,26 @@ CÓDIGOS DE RETORNO
 DESCRIPCION_AYUDA
 }
 
-parametros_script(){
-	if [ $# -ne 1 ]; then
-		
-		POOLS_DISPONIBLES=$(cat /etc/pve/user.cfg | grep pool: | cut -d ":" -f2)
-
-		echo
-		msg_aviso "Debes indicar con que POOL quieres trabajar. Solo podrás trabajar con las MVs del POOL que indiques."
-		echo 
-		msg_icono "${SEARCH}" "Listado de POOLS disponible:"
+#selección del pool a usar en las operaciones
+seleccion_pool(){
+	function mensaje_pools_disponibles(){
+		msg_icono "${SEARCH}" "Listado de POOLS disponibles:"
 		echo
 		echo -n "         "
 		# shellcheck disable=SC2128
 		echo ${POOLS_DISPONIBLES}
 		echo
 		read -r -p "   Indica el POOL de trabajo: " MI_POOL
+	}
+
+	if [ $# -ne 1 ]; then
+		
+		POOLS_DISPONIBLES=$(cat /etc/pve/user.cfg | grep pool: | cut -d ":" -f2)
+
+		echo
+		msg_aviso "Debes indicar con que POOL quieres trabajar. Solo podrás operar con las MVs del POOL que indiques."
+		echo 
+		mensaje_pools_disponibles
 		
 		while ! echo ${POOLS_DISPONIBLES} | grep ${MI_POOL}
 		do
@@ -844,12 +874,7 @@ parametros_script(){
 			msg_error "El POOL indicado no existe en el servidor"
 			echo 
 			sleep 1
-			msg_icono "${SEARCH}" "Listado de POOLS disponible:"
-			echo
-			echo -n "         "
-			echo ${POOLS_DISPONIBLES}
-			echo
-			read -r -p "   Indica el POOL de trabajo: " MI_POOL
+			mensaje_pools_disponibles
 		done
 		
 	else
@@ -867,7 +892,6 @@ parametros_script(){
 				;;
 		esac
 	fi
-
 }
 
 
@@ -878,7 +902,7 @@ clear
 echo "" > ${LOG}
 
 formato_mensajes
-parametros_script $1
-selecciona_usuario
+#selecciona_usuario
+seleccion_pool $1
 mostrar_menu
 

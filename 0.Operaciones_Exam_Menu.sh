@@ -6,8 +6,8 @@
 #				    a partir de una plantilla asignandola a un pool y dándole permiso 
 #					de acceso al usuario
 #author          : Óscar Borrás
-#date mod        : <!#FT> 2025/01/29 00:53:18.223 </#FT>
-#version         : <!#FV> 0.5.0 </#FV>
+#date mod        : <!#FT> 2025/01/29 16:55:35.269 </#FT>
+#version         : <!#FV> 0.5.1 </#FV>
 #license         : GNU GPLv3 
 ############################################################################
 
@@ -27,9 +27,9 @@
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.5.0"
+VERSION="0.5.1"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.5.0 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.5.1 </#FV>"
 
 #Fichero log. Más adelante se indica la subcarpeta donde estará almacenado, que depende del pool
 LOG="$0.log"
@@ -1046,9 +1046,9 @@ mostrar_menu(){
 cabecera_accion(){
 	local msg="$1"
 	clear
-	echo "*****************************" | tee -a ${LOG}
+	echo "**********************************" | tee -a ${LOG}
 	echo "         ${msg}" | tee -a ${LOG}
-	echo "*****************************" | tee -a ${LOG}
+	echo "**********************************" | tee -a ${LOG}
 	echo	
 }
 
@@ -1206,6 +1206,16 @@ DESCRIPCION_AYUDA
 parametros_script(){
 	#seleccion_fich_config
 	#Fichero que contiene las variables a modificar para cada examen
+	function mensaje_pools_disponibles(){
+		msg_icono "${SEARCH}" "Listado de POOLS disponibles:"
+		echo
+		echo -n "         "
+		# shellcheck disable=SC2128
+		echo ${POOLS_DISPONIBLES}
+		echo
+		read -r -p "   Indica el POOL de trabajo: " MI_POOL
+	}
+
 	if [ $# -ne 1 ]; then
 		
 		POOLS_DISPONIBLES=$(cat /etc/pve/user.cfg | grep pool: | cut -d ":" -f2)
@@ -1213,13 +1223,7 @@ parametros_script(){
 		echo
 		msg_aviso "Debes indicar con que POOL quieres trabajar. Solo podrás modificar y eliminar MVs del POOL que indiques."
 		echo 
-		msg_icono "${SEARCH}" "Listado de POOLS disponible:"
-		echo
-		echo -n "         "
-		# shellcheck disable=SC2128
-		echo ${POOLS_DISPONIBLES}
-		echo
-		read -r -p "   Indica el POOL de trabajo: " MI_POOL
+		mensaje_pools_disponibles
 		
 		while ! echo ${POOLS_DISPONIBLES} | grep ${MI_POOL}
 		do
@@ -1228,13 +1232,7 @@ parametros_script(){
 			msg_error "El POOL indicado no existe en el servidor"
 			echo 
 			sleep 1
-			msg_icono "${SEARCH}" "Listado de POOLS disponible:"
-			echo
-			echo -n "         "
-			# shellcheck disable=SC2128
-			echo ${POOLS_DISPONIBLES}
-			echo
-			read -r -p "   Indica el POOL de trabajo: " MI_POOL
+			mensaje_pools_disponibles
 		done
 		
 	else
