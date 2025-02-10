@@ -3,8 +3,8 @@
 ############################################################################
 #title     : Permite realizar diferentes operaciones sobre MV y CTs
 #author    : Óscar Borrás
-#date mod  : <!#FT> 2025/01/30 19:56:45.198 </#FT>
-#version   : <!#FV> 0.5.2 </#FV>
+#date mod  : <!#FT> 2025/02/07 14:15:01.086 </#FT>
+#version   : <!#FV> 0.6.0 </#FV>
 ############################################################################
 
 ############################################################################
@@ -22,9 +22,9 @@
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.5.2"
+VERSION="0.6.0"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.5.2 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.6.0 </#FV>" 
 
 LOG="$0.log"
 
@@ -449,6 +449,80 @@ asignar_TAGS(){
 	fi	
 }
 
+crear_RedesInternas(){
+	local ID=0
+	local IFACE=""
+	local SUBRED=""
+	local CONT=0
+
+	read -p "    Indica el ID de la primera red a crear (no puede existir): " ID_INICIAL
+	read -p "    Indica el ID de la última red a crear (no puede existir) : " ID_FINAL
+	echo
+	echo "    Indicar subred a asignar a la primera red interna (no puede existir)"
+	read -p "     Debes indicar con una X el octeto que se cambiará para cada red a crear (Ej: 10.0.X.0/24): " SUBRED_INICIAL
+	echo
+
+	for (( ID=ID_INICIAL; ID<=ID_FINAL; ID++ ))
+	do
+		IFACE="vmbr${ID}"
+		SUBRED=$(echo "${SUBRED_INICIAL}" | sed "s/X/${CONT}/")
+		#SUBNET_ALU=$(echo "${SUBNETS[$INDEX]}" | sed "s/X/${CONT_ALUMNOS}/")
+		msg_info "--> Creando red interna ** ${IFACE} **"
+		
+		if pvesh create /nodes/localhost/network --type "bridge" --iface ${IFACE} --cidr ${SUBRED} --autostart true --comments "Red interna" &>>${LOG}
+		then
+			msg_ok "Creado red interna ** ${IFACE} **"
+		else
+			msg_error "[ERROR] creando red interna ** ${IFACE} **"		
+		fi
+		(( CONT++ ))
+	done
+	echo
+
+	msg_info "--> Aplicando cambios de red en el servidor proxmox"
+	
+	if 	pvesh set /nodes/localhost/network &>>${LOG}
+	then
+		msg_ok "Cambios de red aplicados satisfactoriamente"
+	else
+		msg_error "[ERROR] aplicando los cambios de red"
+	fi
+}
+
+eliminar_RedesInternas(){
+	# proteger el borrado de vmbr inferior a 10 *************************************************
+	local ID
+	local IFACE
+	local CONT=0
+
+	read -p "    Indica el ID de la primera red a eliminar: " ID_INICIAL
+	read -p "    Indica el ID de la última red a eliminar : " ID_FINAL
+	echo
+
+	for (( ID=ID_INICIAL; ID<=ID_FINAL; ID++ ))
+	do
+		IFACE="vmbr${ID}"
+		msg_info "--> Eliminando red interna ** ${IFACE} **"
+		
+		if pvesh delete /nodes/localhost/network/${IFACE} &>>${LOG}
+		then
+			msg_ok "Eliminado red interna ** ${IFACE} **"
+		else
+			msg_error "[ERROR] realizando backup de la máquina ** ${IFACE} **"
+		fi
+		(( CONT++ ))
+	done
+	echo
+	msg_info "--> Aplicando cambios de red en el servidor proxmox"
+	
+	if 	pvesh set /nodes/localhost/network &>>${LOG}
+	then
+		msg_ok "Cambios de red aplicados satisfactoriamente"
+	else
+		msg_error "[ERROR] aplicando los cambios de red"
+	fi
+}
+
 
 backup_MV(){
 	local ID_MV=$1
@@ -614,7 +688,7 @@ crear_SDN_estatica(){
 	echo
 
 
-#Por defecto se crea zona según el Pool
+	#Por defecto se crea zona según el Pool
 	echo "Indicar ID para la ZONA a crear (zn_${POOL}):"
 	read ID_INICIAL
 	echo "Indicar ID de la ultima MV a iniciar:"
@@ -728,8 +802,10 @@ mostrar_menu(){
 		echo "  2.- Apagar MVs"
 		echo "  3.- Asignar etiquetas a MVs"
 		echo "  4.- Realizar backups de MVs"
-		echo "  5.- Crear Red SDN (Zona - Vnet - Subred)***************"
-		echo "  6.- Eliminar Red SDN (Zona - Vnet - Subred)************"
+		#echo "  5.- Crear Red SDN (Zona - Vnet - Subred)***************"
+		#echo "  6.- Eliminar Red SDN (Zona - Vnet - Subred)************"
+		echo "  7.- Crear Redes Internas (vmbrXX) en Servidor Proxmox"
+		echo "  8.- Eliminar Redes Internas (vmbrXX) en Servidor Proxmox"
 		echo "  9.- Eliminar MVs"
 		echo
 		echo "  S.- Salir."
@@ -764,6 +840,17 @@ mostrar_menu(){
 			5)
 				cabecera_accion "           Crear SDNs"
 				crearSDN
+				pulsa_enter
+				;;
+
+			7)
+				cabecera_accion "           Crear Redes Internas vmbr"
+				crear_RedesInternas
+				pulsa_enter
+				;;
+			8)
+				cabecera_accion "           Eliminar Redes Internas vmbr"
+				eliminar_RedesInternas
 				pulsa_enter
 				;;
 
