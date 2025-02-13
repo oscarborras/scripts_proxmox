@@ -6,8 +6,8 @@
 #				    a partir de una plantilla asignandola a un pool y dándole permiso 
 #					de acceso al usuario
 #author          : Óscar Borrás
-#date mod        : <!#FT> 2025/02/13 13:11:53.632 </#FT>
-#version         : <!#FV> 0.6.0 </#FV>
+#date mod        : <!#FT> 2025/02/13 17:34:37.885 </#FT>
+#version         : <!#FV> 0.6.1 </#FV>
 #license         : GNU GPLv3 
 ############################################################################
 
@@ -27,9 +27,9 @@
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.6.0"
+VERSION="0.6.1"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.6.0 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.6.1 </#FV>"
 
 #Fichero log. Más adelante se indica la subcarpeta donde estará almacenado, que depende del pool
 LOG="$0.log"
@@ -252,7 +252,7 @@ configurar(){
 
 	if ${CMD} set ${ID_MV} --tags "${TAG}" --description "${NOTAS_MV}" &>>${LOG}
 	then
-		msg_ok "${TIPO_MV} ** ${ID_MV} ** configurada."
+		msg_ok "${TIPO_MV} ** ${ID_MV} ** configurado."
 		return 0
 	else
 		msg_error "[ERROR] al configurar ${TIPO_MV} ** ${ID_MV} **"
