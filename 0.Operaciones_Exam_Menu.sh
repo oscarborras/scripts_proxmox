@@ -6,8 +6,8 @@
 #				    a partir de una plantilla asignandola a un pool y dándole permiso 
 #					de acceso al usuario
 #author          : Óscar Borrás
-#date mod        : <!#FT> 2025/01/30 20:04:52.027 </#FT>
-#version         : <!#FV> 0.5.2 </#FV>
+#date mod        : <!#FT> 2025/02/13 12:25:08.356 </#FT>
+#version         : <!#FV> 0.5.3 </#FV>
 #license         : GNU GPLv3 
 ############################################################################
 
@@ -27,9 +27,9 @@
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.5.2"
+VERSION="0.5.3"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.5.2 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.5.3 </#FV>"
 
 #Fichero log. Más adelante se indica la subcarpeta donde estará almacenado, que depende del pool
 LOG="$0.log"
