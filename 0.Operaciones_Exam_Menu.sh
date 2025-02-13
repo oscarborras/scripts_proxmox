@@ -6,8 +6,8 @@
 #				    a partir de una plantilla asignandola a un pool y dándole permiso 
 #					de acceso al usuario
 #author          : Óscar Borrás
-#date mod        : <!#FT> 2025/02/13 12:25:08.356 </#FT>
-#version         : <!#FV> 0.5.3 </#FV>
+#date mod        : <!#FT> 2025/02/13 13:11:53.632 </#FT>
+#version         : <!#FV> 0.6.0 </#FV>
 #license         : GNU GPLv3 
 ############################################################################
 
@@ -27,9 +27,9 @@
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.5.3"
+VERSION="0.6.0"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.5.3 </#FV>"
+VERSION_BOUNDARIES="<!#FV> 0.6.0 </#FV>"
 
 #Fichero log. Más adelante se indica la subcarpeta donde estará almacenado, que depende del pool
 LOG="$0.log"
@@ -917,10 +917,13 @@ config_parametros(){
 
 mostrar_parametros(){
 	clear
+	#num de usuarios del fichero activos (sin comentar)
+	NUM_USU_FICH=$(grep -v '^#' ${USUARIOS} | wc -l)
+
 	echo "----------------------------------------------------"
 	echo "               PARAMETROS ACTUALES"
 	echo "----------------------------------------------------"
-	echo -e "- Fichero de usuarios -> ${GN} ${USUARIOS} ${CL}"
+	echo -e "- Fichero de usuarios -> ${GN} ${USUARIOS} (${NUM_USU_FICH} usuarios activos)${CL}"
 	echo -e "- POOL -> ${GN} ${POOL} ${CL}"
 	echo -e "- ROL -> ${GN} ${ROL} ${CL}"
 	echo -e "- IDs MVs a clonar -> ${GN} ${IDs_MVs_CLONAR[*]} ${CL}"
