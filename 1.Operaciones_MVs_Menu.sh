@@ -3,8 +3,8 @@
 ############################################################################
 #title     : Permite realizar diferentes operaciones sobre MV y CTs
 #author    : Óscar Borrás
-#date mod  : <!#FT> 2025/02/11 00:30:08.755 </#FT>
-#version   : <!#FV> 0.6.1 </#FV>
+#date mod  : <!#FT> 2025/02/14 09:47:01.873 </#FT>
+#version   : <!#FV> 0.6.2 </#FV>
 ############################################################################
 
 ############################################################################
@@ -17,15 +17,16 @@
 ############################################################################
 # POR CORREGIR:
 ############################################################################
+# - crear opcion para clonar máquinas pidiendo los datos necesarios
 # - falta la creacion eliminacion de la SDN
 # - guardar log en carpeta del pool seleccionado
 
 ############################################################################
 # VARIABLES:
 ############################################################################
-VERSION="0.6.1"
+VERSION="0.6.2"
 # shellcheck disable=SC2034
-VERSION_BOUNDARIES="<!#FV> 0.6.1 </#FV>" 
+VERSION_BOUNDARIES="<!#FV> 0.6.2 </#FV>" 
 
 LOG="$0.log"
 
@@ -551,35 +552,54 @@ eliminar_MV(){
 	if comprobar_Pool_MV ${ID_MV}
 	then
 		TIPO_MV=$(comprobar_tipo_MV ${ID_MV})
-
+		
 		if [[ ${TIPO_MV} = "CT" ]]; then
 			CMD="pct"
+			if  pct status ${ID_MV} | grep stopped &>>${LOG}
+			then
+				msg_ok "${TIPO_MV} apagada con ID ** ${ID_MV} **"
+			else
+				if pct stop ${ID_MV} &>>${LOG}
+				then
+					msg_ok "${TIPO_MV} apagada con ID ** ${ID_MV} **"
+				else
+					msg_error "${TIPO_MV} NO se ha podido apagar con ID ** ${ID_MV} **"
+				fi
+			fi
+			
 		elif [[ ${TIPO_MV} = "MV" ]]; then
 			CMD="qm"
+			if qm stop ${ID_MV} --timeout 2 &>>${LOG}
+			then
+				msg_ok "${TIPO_MV} apagada con ID ** ${ID_MV} **"
+			else
+				msg_error "${TIPO_MV} NO se ha podido apagar con ID ** ${ID_MV} **"
+			fi
 		else
 			#no existe la MV/CT
-			msg_error "[ERROR] No existe la máquina ** ${ID_MV} **"
+			msg_error "[ERROR] No se ha detectado el tipo de MV/CT a usar."
 			return 2	
 		fi
-			
-		msg_info "--> 1. Apagando la máquina ** ${ID_MV} **"
-		if ${CMD} stop ${ID_MV} --timeout 2 &>>${LOG}
+
+		if [ $? -eq 0 ]
 		then
 			msg_info "--> 2. Eliminando la máquina ** ${ID_MV} **"
-			if ${CMD} destroy ${ID_MV} --purge --destroy-unreferenced-disks=1 --skiplock=1 &>>${LOG}
+			#if qm destroy ${ID_MV} --purge --destroy-unreferenced-disks=1 --skiplock=1 &>>${LOG}
+			if ${CMD} destroy ${ID_MV} --purge --destroy-unreferenced-disks=1 &>>${LOG}
 			then
-				msg_ok "Eliminado la máquina ** ${ID_MV} **"
+				msg_ok "Eliminado ${TIPO_MV} con ID ** ${ID_MV} **"
 				return 0
 			else
-				msg_error "[ERROR] al eliminar la máquina ** ${ID_MV} **"
+				msg_error "[ERROR] al eliminar ${TIPO_MV} con ID ** ${ID_MV} **"
 				return 1
 			fi
 		else
-			msg_error "[ERROR] al parar la MV ** ${ID_MV} **"
+			msg_error "[ERROR] al parar ${TIPO_MV} con ID ** ${ID_MV} **"
 			return 1
 		fi
+
 	else
-		msg_error "El POOL de la MV/CT ** ${ID_MV} ** no coincide con tu usuario."
+		msg_error "La MV/CT ** ${ID_MV} ** no existe o el POOL de la MV/CT no coincide con tu usuario."
 		return 2
 	fi
 }
